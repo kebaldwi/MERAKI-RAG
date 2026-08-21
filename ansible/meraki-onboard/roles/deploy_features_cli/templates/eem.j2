@@ -1,0 +1,12 @@
+{# NOT NATIVELY SUPPORTED IN CLOUD CONFIG — Device Config / local CLI only #}
+{# EEM Applet — not available in Meraki Dashboard [S1] #}
+{# Use in Device Configuration mode only [S3] #}
+!
+! EEM Applet — gap feature, CLI-only
+!
+event manager applet {{ vars.applet_name }}
+ event syslog pattern "CPU utilization exceeds {{ vars.threshold }}"
+ action 1.0 syslog priority warnings msg "CPU watchdog triggered on {{ switch.name }}"
+ action 1.1 cli command "enable"
+ action 1.2 cli command "show processes cpu sorted | head 20"
+!

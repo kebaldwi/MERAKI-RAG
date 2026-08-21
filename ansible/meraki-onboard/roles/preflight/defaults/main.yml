@@ -1,0 +1,4 @@
+---
+# roles/preflight/defaults/main.yml
+supported_cloud_models: "{{ cloud_config_models }}"
+supported_device_models: "{{ device_config_models }}"

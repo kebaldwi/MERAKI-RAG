@@ -1,0 +1,32 @@
+---
+# roles/onboard_cloud/tasks/main.yml
+# Playbook 2 (Cloud Config path) — Claim device into Meraki Dashboard Organisation.
+# Uses cisco.meraki collection.
+# Sources: [S1] [S4] https://documentation.meraki.com/Switching/Cloud_Management_with_IOS_XE
+
+- name: "Onboard Cloud | Claim device by serial into organisation"
+  cisco.meraki.meraki_device:
+    auth_key:   "{{ vault_meraki_api_key }}"
+    org_id:     "{{ switch.meraki.org_id }}"
+    net_id:     "{{ switch.meraki.network_id }}"
+    state:      present
+    serial:     "{{ switch.serial }}"
+  no_log: true
+  register: claim_result
+  tags: [onboard, onboard_cloud]
+
+- name: "Onboard Cloud | Set device name in Dashboard"
+  cisco.meraki.meraki_device:
+    auth_key:   "{{ vault_meraki_api_key }}"
+    org_id:     "{{ switch.meraki.org_id }}"
+    net_id:     "{{ switch.meraki.network_id }}"
+    state:      present
+    serial:     "{{ switch.serial }}"
+    name:       "{{ switch.name }}"
+  no_log: true
+  tags: [onboard, onboard_cloud]
+
+- name: "Onboard Cloud | Show claim result"
+  ansible.builtin.debug:
+    msg: "SUCCESS: {{ switch.name }} claimed into org {{ switch.meraki.org_id }}"
+  tags: [onboard, onboard_cloud]

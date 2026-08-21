@@ -1,0 +1,66 @@
+---
+# roles/upgrade/tasks/main.yml
+# Playbook 1 — Upgrade IOS-XE firmware via SSH/SCP to the device.
+# Uses cisco.ios collection.
+# Source: [S7] https://software.cisco.com/
+
+- name: "Upgrade | Skip if already on target version"
+  ansible.builtin.debug:
+    msg: >
+      "SKIP: {{ switch.name }} already running target version
+       {{ switch.target_ios_xe_version }}."
+  when: switch.ios_xe_version == switch.target_ios_xe_version
+  tags: [upgrade]
+
+- name: "Upgrade | Copy image to device flash (if URL provided)"
+  cisco.ios.ios_command:
+    commands:
+      - "copy {{ switch.upgrade_image_url }} flash:{{ switch.upgrade_image }}"
+  when:
+    - switch.ios_xe_version != switch.target_ios_xe_version
+    - switch.upgrade_image_url | length > 0
+  no_log: false
+  tags: [upgrade]
+
+- name: "Upgrade | Set boot system to new image"
+  cisco.ios.ios_config:
+    lines:
+      - "no boot system"
+      - "boot system flash:{{ switch.upgrade_image }}"
+    save_when: always
+  when: switch.ios_xe_version != switch.target_ios_xe_version
+  tags: [upgrade]
+
+- name: "Upgrade | Reload device to apply new firmware"
+  cisco.ios.ios_command:
+    commands:
+      - "reload in 1\n\n"
+  when: switch.ios_xe_version != switch.target_ios_xe_version
+  tags: [upgrade]
+
+- name: "Upgrade | Wait for device to come back online"
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host }}"
+    port: 22
+    delay: 90
+    timeout: 600
+  when: switch.ios_xe_version != switch.target_ios_xe_version
+  tags: [upgrade]
+
+- name: "Upgrade | Verify running version after reload"
+  cisco.ios.ios_facts:
+    gather_subset: [default]
+  register: ios_facts_post
+  when: switch.ios_xe_version != switch.target_ios_xe_version
+  tags: [upgrade]
+
+- name: "Upgrade | Assert post-upgrade version matches target"
+  ansible.builtin.assert:
+    that:
+      - ios_facts_post.ansible_facts.ansible_net_version is search(switch.target_ios_xe_version)
+    fail_msg: >
+      "ERROR: Post-upgrade version check failed on {{ switch.name }}.
+       Expected {{ switch.target_ios_xe_version }}.
+       Actual: {{ ios_facts_post.ansible_facts.ansible_net_version }}"
+  when: switch.ios_xe_version != switch.target_ios_xe_version
+  tags: [upgrade]

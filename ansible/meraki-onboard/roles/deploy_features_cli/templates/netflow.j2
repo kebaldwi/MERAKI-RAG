@@ -1,0 +1,16 @@
+{# NOT NATIVELY SUPPORTED IN CLOUD CONFIG — Device Config / local CLI only #}
+{# NetFlow — not available in Meraki Dashboard Cloud Config mode [S1] #}
+{# Use in Device Configuration mode only [S3] #}
+!
+! NetFlow v9 exporter — gap feature, CLI-only
+!
+ip flow-export version 9
+ip flow-export destination {{ vars.exporter_ip }} {{ vars.exporter_port }}
+ip flow-export source {{ vars.source_interface }}
+ip flow-cache timeout active 1
+ip flow-cache timeout inactive 15
+!
+interface {{ vars.source_interface }}
+ ip flow ingress
+ ip flow egress
+!

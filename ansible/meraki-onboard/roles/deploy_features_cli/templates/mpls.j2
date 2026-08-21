@@ -1,0 +1,14 @@
+{# NOT NATIVELY SUPPORTED IN CLOUD CONFIG — Device Config / local CLI only #}
+{# MPLS — not available in Meraki Dashboard Cloud Config mode [S1] #}
+{# Use in Device Configuration mode only [S3] #}
+!
+! MPLS LDP — gap feature, CLI-only
+!
+mpls label protocol ldp
+mpls ldp router-id {{ vars.loopback_interface }} force
+!
+{% for iface in vars.mpls_interfaces | default([]) %}
+interface {{ iface }}
+ mpls ip
+{% endfor %}
+!

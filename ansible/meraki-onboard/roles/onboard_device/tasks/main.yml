@@ -1,0 +1,101 @@
+---
+# roles/onboard_device/tasks/main.yml
+# Playbook 2 (Device Config path) — Push prereq CLI then claim in Dashboard.
+# Uses cisco.ios (CLI prereqs) + cisco.meraki (claim).
+# Source: [S3] https://documentation.meraki.com/Switching/Cloud_Management_with_IOS_XE/
+#              Install_and_Get_Started/Enable_Cloud_Management_for_Cisco_Switches_with_Device_Configuration
+
+# ------------------------------------------------------------------ #
+# Step 1 — Push AAA prerequisite config [S3]                          #
+# ------------------------------------------------------------------ #
+- name: "Onboard Device | Configure aaa new-model [S3]"
+  cisco.ios.ios_config:
+    lines:
+      - "aaa new-model"
+      - "aaa authentication login default local"
+      - "aaa authorization exec default local"
+    save_when: changed
+  tags: [onboard, onboard_device]
+
+- name: "Onboard Device | Create priv-15 onboarding user [S3]"
+  cisco.ios.ios_config:
+    lines:
+      - "username {{ switch.mgmt.onboarding_user }} privilege 15 secret {{ vault_ansible_password }}"
+    save_when: changed
+  no_log: true
+  tags: [onboard, onboard_device]
+
+# ------------------------------------------------------------------ #
+# Step 2 — DNS & NTP [S3]                                             #
+# ------------------------------------------------------------------ #
+- name: "Onboard Device | Configure DNS servers [S3]"
+  cisco.ios.ios_config:
+    lines: "{{ ['ip domain lookup'] + switch.mgmt.dns_servers | map('regex_replace', '^(.*)$', 'ip name-server \\1') | list }}"
+    save_when: changed
+  tags: [onboard, onboard_device]
+
+- name: "Onboard Device | Configure NTP servers [S3]"
+  cisco.ios.ios_config:
+    lines: "{{ switch.mgmt.ntp_servers | map('regex_replace', '^(.*)$', 'ntp server \\1') | list }}"
+    save_when: changed
+  tags: [onboard, onboard_device]
+
+# ------------------------------------------------------------------ #
+# Step 3 — ip routing + default route [S3]                            #
+# ------------------------------------------------------------------ #
+- name: "Onboard Device | Enable ip routing [S3]"
+  cisco.ios.ios_config:
+    lines:
+      - "ip routing"
+    save_when: changed
+  tags: [onboard, onboard_device]
+
+- name: "Onboard Device | Configure default route via uplink port [S3]"
+  cisco.ios.ios_config:
+    lines:
+      - "ip route 0.0.0.0 0.0.0.0 {{ switch.mgmt.uplink_port }}"
+    save_when: changed
+  when: switch.mgmt.default_route is not defined
+  tags: [onboard, onboard_device]
+
+# ------------------------------------------------------------------ #
+# Step 4 — Enable cloud-mgmt service on uplink front-panel port [S3]  #
+# ------------------------------------------------------------------ #
+- name: "Onboard Device | Enable cloud-mgmt service [S3]"
+  cisco.ios.ios_config:
+    lines:
+      - "service cloud-mgmt"
+    save_when: changed
+  tags: [onboard, onboard_device]
+
+- name: "Onboard Device | Save configuration to NVRAM"
+  cisco.ios.ios_command:
+    commands:
+      - "write memory"
+  tags: [onboard, onboard_device]
+
+# ------------------------------------------------------------------ #
+# Step 5 — Claim device in Meraki Dashboard                           #
+# ------------------------------------------------------------------ #
+- name: "Onboard Device | Claim device in Meraki Dashboard"
+  cisco.meraki.meraki_device:
+    auth_key:   "{{ vault_meraki_api_key }}"
+    org_id:     "{{ switch.meraki.org_id }}"
+    net_id:     "{{ switch.meraki.network_id }}"
+    state:      present
+    serial:     "{{ switch.serial }}"
+    name:       "{{ switch.name }}"
+  no_log: true
+  register: device_claim
+  tags: [onboard, onboard_device]
+
+- name: "Onboard Device | Wait for cloud tunnel to establish"
+  ansible.builtin.pause:
+    seconds: 30
+    prompt: "Waiting 30 s for Meraki tunnel to establish on {{ switch.name }} ..."
+  tags: [onboard, onboard_device]
+
+- name: "Onboard Device | Show onboarding result"
+  ansible.builtin.debug:
+    msg: "SUCCESS: {{ switch.name }} claimed into org {{ switch.meraki.org_id }} in Device Config mode."
+  tags: [onboard, onboard_device]

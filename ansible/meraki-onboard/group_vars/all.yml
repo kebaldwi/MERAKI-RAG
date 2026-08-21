@@ -1,0 +1,68 @@
+---
+# group_vars/all.yml
+# Org-wide defaults, version gates, and global Meraki settings.
+
+# ------------------------------------------------------------------ #
+# Meraki API (real values stored in vault.yml / env var)              #
+# ------------------------------------------------------------------ #
+meraki_base_url: "https://api.meraki.com/api/v1"
+meraki_org_id:   "{{ vault_meraki_org_id }}"
+meraki_network_id: "{{ vault_meraki_network_id }}"
+
+# ------------------------------------------------------------------ #
+# Minimum IOS-XE version gates — [S1] / [S3]                         #
+# ------------------------------------------------------------------ #
+min_versions:
+  cloud_base:          "17.15.1"   # Cloud Config base support [S1]
+  cloud_bgp_vrf_vrrp:  "17.18.1"   # BGP, VRF, VRRP, ISSU [S5]
+  cloud_evpn_smartport: "17.18.2"  # Cloud EVPN, SmartPort [S5]
+  cloud_uac:           "17.18.3"   # Uplink Auto-Config [S5]
+  device_base:         "17.15.3"   # Device Config minimum [S3]
+  device_smart:        "17.18.2"   # C9610/C9350 Device Config [S3]
+  cloud_cx8pt:         "26.1.1"    # C9200CX-8PT-2G Cloud + Device [S1]
+  device_c9550:        "26.2.1"    # C9550 Device Config [S1]
+
+# ------------------------------------------------------------------ #
+# Supported model families per mode — [S1]                           #
+# ------------------------------------------------------------------ #
+cloud_config_models:
+  - "MS390"
+  - "C9200L"
+  - "C9300"
+  - "C9300L"
+  - "C9300X"
+  - "C9300-M"
+  - "C9200"
+  - "C9200CX"
+  - "C9500-48Y4C"
+  - "C9500-24Y4C"
+  - "C9500-32C"
+  - "C9500-32QC"
+  - "C9610"
+  - "C9350"
+
+device_config_models:
+  - "C9200L"
+  - "C9300"
+  - "C9300L"
+  - "C9300X"
+  - "C9200"
+  - "C9200CX"
+  - "C9500-12Q"
+  - "C9500-16X"
+  - "C9500-24Q"
+  - "C9500-40X"
+  - "C9500-48Y4C"
+  - "C9500-24Y4C"
+  - "C9500-32C"
+  - "C9500-32QC"
+  - "C9610"
+  - "C9350"
+  - "C9550"
+
+# ------------------------------------------------------------------ #
+# SSH / CLI connection defaults                                       #
+# ------------------------------------------------------------------ #
+ansible_network_os: cisco.ios.ios
+ansible_connection:  network_cli
+ansible_become:      false
