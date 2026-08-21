@@ -1,0 +1,12 @@
+---
+# requirements.yml
+# Install with: ansible-galaxy collection install -r requirements.yml
+collections:
+  - name: cisco.meraki
+    version: ">=2.18.0"
+  - name: cisco.ios
+    version: ">=6.1.0"
+  - name: ansible.netcommon
+    version: ">=6.1.0"
+  - name: community.general
+    version: ">=9.0.0"

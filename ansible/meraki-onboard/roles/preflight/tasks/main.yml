@@ -1,0 +1,129 @@
+---
+# roles/preflight/tasks/main.yml
+# Validates onboarding eligibility and Device Config prerequisites.
+# Makes NO changes — safe to run with --check.
+# Sources: [S1] models, [S3] prereqs, [S5] version gates.
+
+- name: "Preflight | Assert switch dictionary is defined"
+  ansible.builtin.assert:
+    that:
+      - switch is defined
+      - switch.model is defined
+      - switch.ios_xe_version is defined
+      - switch.onboarding_mode is defined
+    fail_msg: "ERROR: host_vars/{{ inventory_hostname }}.yml must define a 'switch:' dictionary."
+  tags: [preflight]
+
+# ------------------------------------------------------------------ #
+# Model + version eligibility                                         #
+# ------------------------------------------------------------------ #
+- name: "Preflight | Assert Cloud Config model eligibility [S1]"
+  ansible.builtin.assert:
+    that: >
+      switch.model | regex_search(item) is not none
+    fail_msg: >
+      "ERROR: {{ switch.model }} is NOT eligible for Cloud Configuration. [S1]
+       See https://documentation.meraki.com/Switching/Cloud_Management_with_IOS_XE
+       Upgrade firmware at https://software.cisco.com/ [S7]"
+  loop: "{{ supported_cloud_models }}"
+  when: switch.onboarding_mode == "cloud"
+  tags: [preflight]
+
+- name: "Preflight | Assert Device Config model eligibility [S1]"
+  ansible.builtin.assert:
+    that: >
+      switch.model | regex_search(item) is not none
+    fail_msg: >
+      "ERROR: {{ switch.model }} is NOT eligible for Device Configuration. [S1]"
+  loop: "{{ supported_device_models }}"
+  when: switch.onboarding_mode == "device"
+  tags: [preflight]
+
+- name: "Preflight | Assert minimum IOS-XE version for Cloud Config [S1]"
+  ansible.builtin.assert:
+    that:
+      - switch.ios_xe_version is version(min_versions.cloud_base, '>=')
+    fail_msg: >
+      "ERROR: {{ switch.model }} running {{ switch.ios_xe_version }} is below Cloud Config
+       minimum {{ min_versions.cloud_base }}. Upgrade at https://software.cisco.com/ [S7]"
+  when: switch.onboarding_mode == "cloud"
+  tags: [preflight]
+
+- name: "Preflight | Assert minimum IOS-XE version for Device Config [S3]"
+  ansible.builtin.assert:
+    that:
+      - switch.ios_xe_version is version(min_versions.device_base, '>=')
+    fail_msg: >
+      "ERROR: {{ switch.model }} running {{ switch.ios_xe_version }} is below Device Config
+       minimum {{ min_versions.device_base }}. Upgrade at https://software.cisco.com/ [S7]"
+  when: switch.onboarding_mode == "device"
+  tags: [preflight]
+
+# ------------------------------------------------------------------ #
+# Version-gated feature warnings                                      #
+# ------------------------------------------------------------------ #
+- name: "Preflight | Warn if BGP/VRF/VRRP defined but version < 17.18.1 [S5]"
+  ansible.builtin.debug:
+    msg: >
+      "WARNING: BGP/VRF/VRRP detected but IOS-XE {{ switch.ios_xe_version }} < 17.18.1.
+       These features require 17.18.1+. [S5]
+       See https://documentation.meraki.com/...Cloud_Configuration%3A_Release_Versions_and_Highlights"
+  when:
+    - switch.onboarding_mode == "cloud"
+    - (switch.features.routing.bgp is defined or switch.features.routing.vrf is defined)
+    - not (switch.ios_xe_version is version(min_versions.cloud_bgp_vrf_vrrp, '>='))
+  tags: [preflight]
+
+# ------------------------------------------------------------------ #
+# Device Config prerequisite audit [S3]                               #
+# ------------------------------------------------------------------ #
+- name: "Preflight | Assert Device Config mgmt block is defined [S3]"
+  ansible.builtin.assert:
+    that:
+      - switch.mgmt is defined
+      - switch.mgmt.uplink_port is defined
+      - switch.mgmt.dns_servers is defined
+      - switch.mgmt.ntp_servers is defined
+      - switch.mgmt.onboarding_user is defined
+    fail_msg: >
+      "ERROR: switch.mgmt block missing required fields for Device Config. [S3]
+       See https://documentation.meraki.com/Switching/Cloud_Management_with_IOS_XE/
+       Install_and_Get_Started/Enable_Cloud_Management_for_Cisco_Switches_with_Device_Configuration"
+  when: switch.onboarding_mode == "device"
+  tags: [preflight]
+
+- name: "Preflight | Assert default VRF only for Device Config [S3]"
+  ansible.builtin.assert:
+    that:
+      - switch.mgmt.default_vrf | bool
+    fail_msg: >
+      "ERROR: Device Config supports ONLY the Global/Default VRF.
+       Non-default VRFs on the management path are not supported. [S3]"
+  when: switch.onboarding_mode == "device"
+  tags: [preflight]
+
+- name: "Preflight | Assert ip_routing enabled for Device Config [S3]"
+  ansible.builtin.assert:
+    that:
+      - switch.mgmt.ip_routing | bool
+    fail_msg: >
+      "ERROR: 'ip routing' must be enabled on the device for Device Config onboarding. [S3]"
+  when: switch.onboarding_mode == "device"
+  tags: [preflight]
+
+- name: "Preflight | Assert onboarding user privilege 15 [S3]"
+  ansible.builtin.assert:
+    that:
+      - switch.mgmt.onboarding_user_privilege | default(15) | int == 15
+    fail_msg: >
+      "ERROR: Onboarding user '{{ switch.mgmt.onboarding_user }}' must be privilege 15. [S3]"
+  when: switch.onboarding_mode == "device"
+  tags: [preflight]
+
+- name: "Preflight | Print readiness summary"
+  ansible.builtin.debug:
+    msg: >
+      "READY: {{ switch.name }} ({{ switch.model }}, IOS-XE {{ switch.ios_xe_version }})
+       Mode: {{ switch.onboarding_mode | upper }}
+       Meraki org: {{ switch.meraki.org_id }}"
+  tags: [preflight]

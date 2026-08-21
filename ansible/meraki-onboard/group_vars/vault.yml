@@ -1,0 +1,16 @@
+---
+# group_vars/vault.yml
+# Encrypt this file with:  ansible-vault encrypt group_vars/vault.yml
+# Reference: https://docs.ansible.com/ansible/latest/vault_guide/index.html
+#
+# The MERAKI_DASHBOARD_API_KEY environment variable is also honoured by the
+# cisco.meraki collection and avoids storing the key even in a vault file.
+
+vault_meraki_api_key:    "REPLACE_WITH_REAL_KEY"    # ansible-vault encrypt_string
+vault_meraki_org_id:     "REPLACE_WITH_ORG_ID"
+vault_meraki_network_id: "REPLACE_WITH_NETWORK_ID"
+
+# Device SSH credentials (used by cisco.ios / network_cli)
+vault_ansible_user:     "meraki-svc"
+vault_ansible_password: "REPLACE_WITH_PASSWORD"
+vault_ansible_enable:   "REPLACE_WITH_ENABLE_SECRET"

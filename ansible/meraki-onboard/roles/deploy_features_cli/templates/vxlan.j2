@@ -1,0 +1,19 @@
+{# NOT NATIVELY SUPPORTED IN CLOUD CONFIG — Device Config / local CLI only #}
+{# Non-EVPN VXLAN — not supported in Cloud Config Dashboard [S1] #}
+{# EVPN-based VXLAN IS supported at 17.18.2+ in Cloud Config [S5] #}
+{# Use non-EVPN VXLAN in Device Configuration mode only [S3] #}
+!
+! VXLAN (non-EVPN) — gap feature, CLI-only
+!
+{% for vni in vars.vxlan_vnis | default([]) %}
+interface nve1
+ no ip address
+ source-interface {{ vars.source_interface | default("Loopback0") }}
+ member vni {{ vni.id }} ingress-replication
+{% if vni.peers is defined %}
+{% for peer in vni.peers %}
+  ingress-replication {{ peer }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+!

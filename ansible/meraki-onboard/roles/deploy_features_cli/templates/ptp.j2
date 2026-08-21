@@ -1,0 +1,18 @@
+{# NOT NATIVELY SUPPORTED IN CLOUD CONFIG — Device Config / local CLI only #}
+{# PTP — Precision Time Protocol boundary/transparent mode [S1] #}
+{# Use in Device Configuration mode only [S3] #}
+!
+! PTP Boundary Clock — gap feature, CLI-only
+!
+ptp clock {{ vars.clock_mode | default("boundary") }} domain {{ vars.domain | default(0) }}
+ clock-port {{ vars.port_name | default("UPSTREAM") }} {{ vars.port_mode | default("slave") }}
+  transport ipv4 unicast local {{ vars.local_ip }}
+  peer ip address {{ vars.peer_ip }}
+  delay-req interval 0
+  exit
+!
+{% for iface in vars.ptp_interfaces | default([]) %}
+interface {{ iface }}
+ ptp enable
+{% endfor %}
+!

@@ -1,0 +1,15 @@
+{# NOT NATIVELY SUPPORTED IN CLOUD CONFIG — Device Config / local CLI only #}
+{# TrustSec / SGT — not available in Meraki Dashboard Cloud Config mode [S1] #}
+{# Use in Device Configuration mode only [S3] #}
+!
+! TrustSec / Security Group Tag — gap feature, CLI-only
+!
+cts role-based enforcement
+cts role-based enforcement vlan-list {{ vars.enforcement_vlans | default("all") }}
+!
+{% for peer in vars.cts_peers | default([]) %}
+interface {{ peer.interface }}
+ cts manual
+  policy static sgt {{ peer.sgt }} trusted
+{% endfor %}
+!

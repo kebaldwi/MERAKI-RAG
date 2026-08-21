@@ -1,0 +1,52 @@
+---
+# site.yml — Master playbook
+# Imports roles in the correct order; each role is tag-aware.
+# Usage:
+#   Full run:            ansible-playbook site.yml
+#   Check mode:          ansible-playbook site.yml --check
+#   Preflight only:      ansible-playbook site.yml --tags preflight
+#   Onboard only:        ansible-playbook site.yml --tags onboard
+#   Features (API):      ansible-playbook site.yml --tags features_api
+#   Features (CLI):      ansible-playbook site.yml --tags features_cli
+
+- name: "Meraki Onboarding — Preflight"
+  hosts: all
+  gather_facts: false
+  tags: [preflight]
+  roles:
+    - role: preflight
+
+- name: "Meraki Onboarding — Firmware Upgrade"
+  hosts: all
+  gather_facts: false
+  tags: [upgrade]
+  roles:
+    - role: upgrade
+
+- name: "Meraki Onboarding — Cloud Configuration"
+  hosts: cloud_config
+  gather_facts: false
+  tags: [onboard, onboard_cloud]
+  roles:
+    - role: onboard_cloud
+
+- name: "Meraki Onboarding — Device Configuration"
+  hosts: device_config
+  gather_facts: false
+  tags: [onboard, onboard_device]
+  roles:
+    - role: onboard_device
+
+- name: "Meraki Onboarding — Deploy Native Features via API"
+  hosts: all
+  gather_facts: false
+  tags: [features_api]
+  roles:
+    - role: deploy_features_api
+
+- name: "Meraki Onboarding — Deploy Gap/CLI Features via IOS-XE CLI"
+  hosts: device_config
+  gather_facts: false
+  tags: [features_cli]
+  roles:
+    - role: deploy_features_cli

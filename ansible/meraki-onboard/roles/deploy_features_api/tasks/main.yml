@@ -1,0 +1,144 @@
+---
+# roles/deploy_features_api/tasks/main.yml
+# Playbook 3 — Deploy NATIVE features via Meraki Dashboard API.
+# Uses cisco.meraki collection.
+# Sources: [S5] version gates, [S1] model/feature matrix.
+
+# ------------------------------------------------------------------ #
+# VLANs                                                               #
+# ------------------------------------------------------------------ #
+- name: "Features API | Create VLANs in Dashboard"
+  cisco.meraki.meraki_vlan:
+    auth_key: "{{ vault_meraki_api_key }}"
+    org_id:   "{{ switch.meraki.org_id }}"
+    net_id:   "{{ switch.meraki.network_id }}"
+    state:    present
+    vlan_id:  "{{ item.id }}"
+    name:     "{{ item.name }}"
+  loop: "{{ switch.features.vlans | default([]) }}"
+  no_log: true
+  tags: [features_api]
+
+# ------------------------------------------------------------------ #
+# Switchport — Access Ports                                           #
+# ------------------------------------------------------------------ #
+- name: "Features API | Configure access ports"
+  cisco.meraki.meraki_ms_switchport:
+    auth_key:      "{{ vault_meraki_api_key }}"
+    org_id:        "{{ switch.meraki.org_id }}"
+    net_id:        "{{ switch.meraki.network_id }}"
+    serial:        "{{ switch.serial }}"
+    number:        "{{ item.interface | regex_replace('^[A-Za-z]+', '') }}"
+    state:         present
+    type:          access
+    vlan:          "{{ item.vlan }}"
+    voice_vlan:    "{{ item.voice_vlan | default(omit) }}"
+    stp_guard:     "{{ 'portfast' if item.stp_portfast | default(false) else omit }}"
+  loop: "{{ switch.features.access_ports | default([]) }}"
+  no_log: true
+  tags: [features_api]
+
+# ------------------------------------------------------------------ #
+# Switchport — Trunk Ports                                            #
+# ------------------------------------------------------------------ #
+- name: "Features API | Configure trunk ports"
+  cisco.meraki.meraki_ms_switchport:
+    auth_key:       "{{ vault_meraki_api_key }}"
+    org_id:         "{{ switch.meraki.org_id }}"
+    net_id:         "{{ switch.meraki.network_id }}"
+    serial:         "{{ switch.serial }}"
+    number:         "{{ item.interface | regex_replace('^[A-Za-z]+', '') }}"
+    state:          present
+    type:           trunk
+    allowed_vlans:  "{{ item.allowed_vlans }}"
+    native_vlan:    "{{ item.native_vlan | default(1) }}"
+  loop: "{{ switch.features.trunk_ports | default([]) }}"
+  no_log: true
+  tags: [features_api]
+
+# ------------------------------------------------------------------ #
+# EtherChannel / Link Aggregation                                     #
+# ------------------------------------------------------------------ #
+- name: "Features API | Configure EtherChannel (Link Aggregation)"
+  cisco.meraki.meraki_ms_link_aggregation:
+    auth_key: "{{ vault_meraki_api_key }}"
+    org_id:   "{{ switch.meraki.org_id }}"
+    net_id:   "{{ switch.meraki.network_id }}"
+    state:    present
+    switch_ports:
+      - serial: "{{ switch.serial }}"
+        port_id: "{{ port }}"
+  loop: "{{ switch.features.etherchannel | default([]) }}"
+  loop_control:
+    loop_var: lag
+  vars:
+    members: "{{ lag.members }}"
+  no_log: true
+  tags: [features_api]
+
+# ------------------------------------------------------------------ #
+# DHCP Snooping                                                       #
+# ------------------------------------------------------------------ #
+- name: "Features API | Configure DHCP snooping"
+  cisco.meraki.meraki_ms_dhcp:
+    auth_key: "{{ vault_meraki_api_key }}"
+    org_id:   "{{ switch.meraki.org_id }}"
+    net_id:   "{{ switch.meraki.network_id }}"
+    state:    present
+    dhcp_snooping_enabled: "{{ switch.features.security.dhcp_snooping.enabled }}"
+  when: switch.features.security.dhcp_snooping is defined
+  no_log: true
+  tags: [features_api]
+
+# ------------------------------------------------------------------ #
+# STP                                                                 #
+# ------------------------------------------------------------------ #
+- name: "Features API | Configure STP mode"
+  cisco.meraki.meraki_ms_stp:
+    auth_key:    "{{ vault_meraki_api_key }}"
+    org_id:      "{{ switch.meraki.org_id }}"
+    net_id:      "{{ switch.meraki.network_id }}"
+    state:       present
+    rstp_enabled: "{{ 'true' if switch.features.stp.mode | default('rapid-pvst') == 'rapid-pvst' else 'false' }}"
+  when: switch.features.stp is defined
+  no_log: true
+  tags: [features_api]
+
+# ------------------------------------------------------------------ #
+# BGP (requires 17.18.1+) [S5]                                        #
+# ------------------------------------------------------------------ #
+- name: "Features API | Warn — BGP requires 17.18.1+ [S5]"
+  ansible.builtin.debug:
+    msg: >
+      "WARNING: BGP configuration requires IOS-XE >= 17.18.1.
+       Current: {{ switch.ios_xe_version }}. Skipping BGP deployment. [S5]"
+  when:
+    - switch.features.routing.bgp is defined
+    - not (switch.ios_xe_version is version(min_versions.cloud_bgp_vrf_vrrp, '>='))
+  tags: [features_api]
+
+- name: "Features API | Note — BGP is managed via Dashboard routing tab (17.18.1+) [S5]"
+  ansible.builtin.debug:
+    msg: >
+      "INFO: BGP ASN {{ switch.features.routing.bgp.asn }} must be configured
+       in Dashboard > Switching > Routing. Verify in Dashboard after onboarding. [S5]"
+  when:
+    - switch.features.routing.bgp is defined
+    - switch.ios_xe_version is version(min_versions.cloud_bgp_vrf_vrrp, '>=')
+  tags: [features_api]
+
+# ------------------------------------------------------------------ #
+# CLI-only gap features — warn, do not configure                      #
+# ------------------------------------------------------------------ #
+- name: "Features API | Warn about gap/CLI-only features in Cloud Config mode"
+  ansible.builtin.debug:
+    msg: >
+      "GAP: Feature '{{ item.feature }}' is NOT natively supported in Cloud Config mode.
+       It will be skipped. For Device Config mode, run the features_cli role instead.
+       See deploy_features_cli/templates/{{ item.template }}"
+  loop: "{{ switch.features.cli_only | default([]) }}"
+  when:
+    - switch.onboarding_mode == "cloud"
+    - switch.features.cli_only is defined
+    - switch.features.cli_only | length > 0
+  tags: [features_api]

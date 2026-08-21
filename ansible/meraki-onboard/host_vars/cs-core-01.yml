@@ -1,0 +1,84 @@
+---
+# host_vars/cs-core-01.yml
+# Example: Device Configuration mode — C9500-40X (legacy, Cloud Config ineligible) [S1]
+switch:
+  name: "cs-core-01"
+  serial: "Q2CC-YYYY-YYYY"
+  model: "C9500-40X"
+  ios_xe_version: "17.15.3"
+  onboarding_mode: "device"         # cloud | device
+  target_ios_xe_version: "17.15.3"
+  upgrade_image: "cat9k_iosxe.17.15.03.SPA.bin"
+  upgrade_image_url: ""
+
+  meraki:
+    org_id: "{{ meraki_org_id }}"
+    network_id: "{{ meraki_network_id }}"
+    claim_method: "serial"
+
+  mgmt:                              # Device Config prereqs [S3]
+    uplink_port: "TenGigabitEthernet1/0/1"   # FRONT-PANEL port, not mgmt iface
+    default_vrf: true                # Only Global VRF supported [S3]
+    ip_routing: true
+    default_route: "0.0.0.0/0"
+    dns_servers:
+      - "8.8.8.8"
+      - "8.8.4.4"
+    ntp_servers:
+      - "time.cloudflare.com"
+    onboarding_user: "meraki-svc"    # priv-15, local-first in aaa [S3]
+    onboarding_user_privilege: 15
+
+  features:
+    vlans:
+      - { id: 100, name: "SERVERS" }
+      - { id: 200, name: "STORAGE" }
+
+    trunk_ports:
+      - interface: "TenGigabitEthernet1/0/1"
+        allowed_vlans: "100,200"
+        native_vlan: 1
+        description: "Uplink-to-WAN"
+
+    svis:
+      - vlan: 100
+        ip: "10.100.0.1"
+        mask: "255.255.255.0"
+        description: "SERVERS-SVI"
+      - vlan: 200
+        ip: "10.200.0.1"
+        mask: "255.255.255.0"
+        description: "STORAGE-SVI"
+
+    routing:
+      ospf:
+        process: 1
+        networks:
+          - { net: "10.100.0.0", wc: "0.0.0.255", area: 0 }
+          - { net: "10.200.0.0", wc: "0.0.0.255", area: 0 }
+
+    security:
+      dhcp_snooping:
+        enabled: true
+        vlans: "100,200"
+      acls:
+        - name: "CORE-FILTER"
+          rules:
+            - "permit ip 10.0.0.0 0.255.255.255 any"
+            - "deny   ip any any log"
+
+    # gap / CLI-only features — managed via local CLI in Device Config mode [S3]
+    cli_only:
+      - feature: "netflow"
+        template: "netflow.j2"
+        vars:
+          exporter_ip: "10.0.0.100"
+          exporter_port: 9996
+          source_interface: "Loopback0"
+
+      - feature: "eem_watchdog"
+        template: "eem.j2"
+        vars:
+          applet_name: "CPU-WATCHDOG"
+          threshold: 90
+          syslog_server: "10.0.0.200"

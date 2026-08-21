@@ -1,0 +1,44 @@
+---
+# roles/deploy_features_cli/tasks/main.yml
+# Deploy gap/CLI-only features via IOS-XE CLI (Device Config mode only).
+# Uses cisco.ios collection.
+# Sources: [S3] Device Config mode, [S5] unsupported features.
+# NOTE: Cloud Config CLI is READ-ONLY — these tasks are skipped for cloud mode.
+
+- name: "Features CLI | Abort in Cloud Config mode (CLI is read-only) [S1]"
+  ansible.builtin.debug:
+    msg: >
+      "INFO: {{ switch.name }} is in Cloud Config mode — CLI is READ-ONLY.
+       Gap features cannot be pushed. Document them as residual or migrate to Device Config. [S1]"
+  when: switch.onboarding_mode == "cloud"
+  tags: [features_cli]
+
+- name: "Features CLI | Render and push gap feature templates (Device Config only)"
+  when:
+    - switch.onboarding_mode == "device"
+    - switch.features.cli_only is defined
+    - switch.features.cli_only | length > 0
+  tags: [features_cli]
+  block:
+    - name: "Features CLI | Render Jinja2 template for each gap feature"
+      ansible.builtin.template:
+        src: "{{ item.template }}"
+        dest: "/tmp/{{ switch.name }}_{{ item.feature }}.cfg"
+        mode: "0600"
+      loop: "{{ switch.features.cli_only }}"
+      delegate_to: localhost
+      register: rendered_templates
+
+    - name: "Features CLI | Push rendered config to device"
+      cisco.ios.ios_config:
+        src: "/tmp/{{ switch.name }}_{{ item.feature }}.cfg"
+        save_when: changed
+      loop: "{{ switch.features.cli_only }}"
+      no_log: false
+
+    - name: "Features CLI | Clean up temporary rendered configs"
+      ansible.builtin.file:
+        path: "/tmp/{{ switch.name }}_{{ item.feature }}.cfg"
+        state: absent
+      loop: "{{ switch.features.cli_only }}"
+      delegate_to: localhost
